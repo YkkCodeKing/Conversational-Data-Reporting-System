@@ -8,7 +8,7 @@
 - **核心框架**: FastAPI 0.109.0, Uvicorn 0.27.0, Python 3.11+
 - **数据库组件**: PostgreSQL 15 (通过 `asyncpg` 驱动), Redis 7, ChromaDB 0.4.22
 - **ORM 与数据校验**: SQLAlchemy 2.0.25 (异步引擎支持), Alembic 1.13.1, Pydantic 2.5.3 (通过 `pydantic_settings` 管理环境)
-- **AI 与大模型基座**: Anthropic 0.17.0 (Claude 支持 SSE 流返回), OpenAI 1.10.0, LangChain 0.1.0
+- **AI 与大模型基座**: OpenAI 1.10.0 (无缝接入 DeepSeek 等 OAI 兼容接口模型，支持 SSE 流返回), LangChain 0.1.0
 - **认证与周边库**: python-jose 3.3.0, passlib 1.7.4, httpx 0.26.0, pandas 2.2.0, loguru 0.7.2, celery 5.3.4
 
 ### 分层架构说明
@@ -41,7 +41,7 @@ backend/
 │   │   ├── insight/           # 智能洞察领域 (趋势分析/异常检测/关键发现)
 │   │   └── report/            # 仪表盘报表领域 (组件编排/发布管理)
 │   └── shared/                # 共享公共基础设施层 (Infrastructure)
-│       ├── ai/                # LLM大模型统一调用防腐层 (Claude/GPT)
+│       ├── ai/                # LLM大模型统一调用防腐层 (DeepSeek/GPT)
 │       ├── cache/             # L1内存+L2 Redis 两级缓存管理
 │       ├── database/          # 异步引擎、Session管理、泛型Repository基类
 │       ├── messaging/         # Celery 与消息队列抽象
@@ -117,7 +117,7 @@ backend/
 
 ## 🚀 核心特性
 
-- **高度解耦的 AI 基建**: 基于抽象工厂模式的 `BaseLLMClient`，支持 Claude 与 GPT 运行时灵活切换，提供异步并行处理与 SSE 流式对话。
+- **高度解耦的 AI 基建**: 基于抽象工厂模式的 `BaseLLMClient`，目前原生接入 **DeepSeek** (基于 OpenAI SDK) 并支持灵活扩展或切换其他模型，提供异步并行处理与 SSE 流式对话。
 - **NL2SQL 智能查询引擎**: 自动抓取目标库 Schema → 组装上下文 → LLM 生成安全 SQL → 执行并持久化，全链路自动化。
 - **两级全异步缓存系统**: L1 进程内存字典零网络开销极速访问，L2 Redis 持久态跨实例共享。
 - **现代化异步与类型提示**: 基于 `asyncpg` + SQLAlchemy 2.0 异步引擎的全链路异步 IO，Pydantic 2 严格类型安全校验。
@@ -146,7 +146,7 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 ```
-随后编辑 `.env` 文件，填入可用的数据库凭证、Redis URL 以及各大厂商大模型 API Key。
+随后编辑 `.env` 文件，填入可用的数据库凭证、Redis URL 以及 DeepSeek (或相关大模型) 的 API Key。
 
 ### 4. 启动后端服务器
 项目利用 Uvicorn 搭载 FastAPI 提供异步事件循环 HTTP 服务：
