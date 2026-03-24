@@ -1,16 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import AsyncGenerator, Dict, Any, List
+from typing import AsyncGenerator, Dict, List, Optional
 
-from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 from loguru import logger
 
 from app.core.config import settings
 
+
 class BaseLLMClient(ABC):
-    """
-    LLM 客户端的抽象基类，规范标准与流式生成接口
-    """
+    """LLM 客户端的抽象基类，规范标准与流式生成接口"""
+
     @abstractmethod
     async def generate(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """普通生成完整文本"""
@@ -22,56 +21,48 @@ class BaseLLMClient(ABC):
         pass
 
 
-class ClaudeClient(BaseLLMClient):
+class DeepSeekClient(BaseLLMClient):
     """
-    Claude API 客户端实现基于 anthropic SDK
+    DeepSeek 客户端实现：使用 OpenAI 兼容接口。
+    通过自定义 base_url 指向 DeepSeek 的 API 端点。
     """
     def __init__(self):
-        if not settings.ANTHROPIC_API_KEY:
-            logger.warning("Anthropic API Key is missing. ClaudeClient may fail.")
-        self.client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        self.default_model = "claude-3-5-sonnet-20241022"
+        if not settings.DEEPSEEK_API_KEY:
+            logger.warning("DeepSeek API Key 未配置，DeepSeekClient 调用将失败。")
+        self.client = AsyncOpenAI(
+            api_key=settings.DEEPSEEK_API_KEY,
+            base_url=settings.DEEPSEEK_BASE_URL,
+        )
+        self.default_model = settings.DEEPSEEK_MODEL
 
     async def generate(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """非流式调用 DeepSeek 生成完整文本"""
         model = kwargs.get("model", self.default_model)
-        max_tokens = kwargs.get("max_tokens", 4096)
-        
-        # 转换 system message
-        system_prompt = next((m["content"] for m in messages if m["role"] == "system"), None)
-        chat_messages = [m for m in messages if m["role"] != "system"]
-
-        response = await self.client.messages.create(
+        response = await self.client.chat.completions.create(
             model=model,
-            max_tokens=max_tokens,
-            messages=chat_messages,
-            system=system_prompt if system_prompt else "",
+            messages=messages,
         )
-        return response.content[0].text
+        return response.choices[0].message.content or ""
 
     async def stream_generate(self, messages: List[Dict[str, str]], **kwargs) -> AsyncGenerator[str, None]:
+        """流式调用 DeepSeek（用于 SSE 推送）"""
         model = kwargs.get("model", self.default_model)
-        max_tokens = kwargs.get("max_tokens", 4096)
-        
-        system_prompt = next((m["content"] for m in messages if m["role"] == "system"), None)
-        chat_messages = [m for m in messages if m["role"] != "system"]
-
-        async with self.client.messages.stream(
+        stream = await self.client.chat.completions.create(
             model=model,
-            max_tokens=max_tokens,
-            messages=chat_messages,
-            system=system_prompt if system_prompt else "",
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
+            messages=messages,
+            stream=True,
+        )
+        async for chunk in stream:
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
 
 
 class GPTClient(BaseLLMClient):
-    """
-    OpenAI/GPT 客户端实现，作为备用或比对
-    """
+    """OpenAI/GPT 客户端实现，作为备用"""
+
     def __init__(self):
         if not settings.OPENAI_API_KEY:
-            logger.warning("OpenAI API Key is missing. GPTClient may fail.")
+            logger.warning("OpenAI API Key 未配置，GPTClient 调用将失败。")
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         self.default_model = "gpt-4o"
 
@@ -94,5 +85,19 @@ class GPTClient(BaseLLMClient):
             if chunk.choices[0].delta.content is not None:
                 yield chunk.choices[0].delta.content
 
-# 默认提供一个以 Claude 为主的 Client 实例
-llm_client = ClaudeClient()
+
+def _create_llm_client() -> BaseLLMClient:
+    """根据配置自动选择最佳可用的 LLM 客户端"""
+    if settings.DEEPSEEK_API_KEY:
+        logger.info("LLM 引擎: DeepSeek (deepseek-chat)")
+        return DeepSeekClient()
+    elif settings.OPENAI_API_KEY:
+        logger.info("LLM 引擎: OpenAI (GPT)")
+        return GPTClient()
+    else:
+        logger.warning("未检测到任何 LLM API Key，默认使用 DeepSeek 客户端（调用时会报错）。")
+        return DeepSeekClient()
+
+
+# 全局单例：根据 .env 配置自动选择引擎
+llm_client = _create_llm_client()

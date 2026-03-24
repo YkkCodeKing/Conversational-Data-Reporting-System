@@ -14,14 +14,20 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Database
-    # 为了在没有实际数据库环境时也能启动 Swagger，这里提供一个临时 Mock 默认值
-    DATABASE_URL: Optional[str] = "postgresql+asyncpg://postgres:postgres@localhost:5432/mock_db"
+    DATABASE_URL: Optional[str] = "postgresql+asyncpg://yangke@localhost:5432/reporting_db"
 
     # Redis
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
 
-    # LLM API Keys
+    # DeepSeek (主力模型，兼容 OpenAI SDK)
+    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    # Anthropic (保留备用)
     ANTHROPIC_API_KEY: Optional[str] = None
+
+    # OpenAI (保留备用)
     OPENAI_API_KEY: Optional[str] = None
     
     # ChromaDB
