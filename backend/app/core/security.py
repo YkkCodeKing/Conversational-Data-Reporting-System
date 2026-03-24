@@ -2,29 +2,31 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.shared.database.session import get_db
 
-# 密码哈希上下文
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# OAuth2 令牌提取器
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+# JWT 令牌提取器 (替换为 HTTPBearer 使得 Swagger 支持直接粘贴 Token)
+security_scheme = HTTPBearer()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """校验明文密码与哈希是否匹配"""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        if isinstance(hashed_password, str):
+            hashed_password = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password)
+    except ValueError:
+        return False
 
 
 def get_password_hash(password: str) -> str:
     """将明文密码转换为 bcrypt 哈希"""
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -36,9 +38,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token_auth: HTTPAuthorizationCredentials = Depends(security_scheme),
     db: AsyncSession = Depends(get_db),
 ):
+    token = token_auth.credentials
     """
     FastAPI 依赖注入：从请求头 Bearer Token 中解析当前用户。
     延迟导入 AuthRepository 以避免循环依赖。
