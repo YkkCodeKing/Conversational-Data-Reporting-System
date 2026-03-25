@@ -32,3 +32,10 @@ class TokenResponse(BaseModel):
     """JWT 令牌响应体"""
     access_token: str
     token_type: str = "bearer"
+
+
+class UserRoleUpdate(BaseModel):
+    """管理员更新用户角色与状态的请求体"""
+    role: Optional[str] = Field(None, description="用户角色: user / admin")
+    is_active: Optional[bool] = Field(None, description="是否处于激活状态(true/false)")
+

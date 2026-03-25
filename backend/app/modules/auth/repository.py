@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -26,6 +26,21 @@ class AuthRepository(BaseRepository[User]):
         """创建新用户"""
         user = User(username=username, email=email, hashed_password=hashed_password)
         db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+
+    async def get_users(self, db: AsyncSession, limit: int = 50, offset: int = 0) -> List[User]:
+        """管理员：分页获取所有用户"""
+        result = await db.execute(select(User).order_by(User.id.desc()).limit(limit).offset(offset))
+        return list(result.scalars().all())
+
+    async def update_user_role_status(self, db: AsyncSession, user: User, role: Optional[str], is_active: Optional[bool]) -> User:
+        """管理员：更新用户的角色与状态"""
+        if role is not None:
+            user.role = role
+        if is_active is not None:
+            user.is_active = is_active
         await db.commit()
         await db.refresh(user)
         return user

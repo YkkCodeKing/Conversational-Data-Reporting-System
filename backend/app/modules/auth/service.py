@@ -1,3 +1,4 @@
+from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +39,22 @@ class AuthService:
 
         token = create_access_token(data={"sub": str(user.id)})
         return TokenResponse(access_token=token)
+
+    @staticmethod
+    async def list_users(db: AsyncSession, limit: int = 50, offset: int = 0) -> List[UserResponse]:
+        """管理员：分页列出系统内所有用户"""
+        users = await auth_repo.get_users(db, limit=limit, offset=offset)
+        return [UserResponse.model_validate(user) for user in users]
+
+    @staticmethod
+    async def update_user(db: AsyncSession, user_id: int, role: Optional[str], is_active: Optional[bool]) -> UserResponse:
+        """管理员：更改目标用户的权限和状态"""
+        user = await auth_repo.get(db, user_id)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标用户不存在")
+        
+        updated_user = await auth_repo.update_user_role_status(db, user, role, is_active)
+        return UserResponse.model_validate(updated_user)
 
 
 auth_service = AuthService()

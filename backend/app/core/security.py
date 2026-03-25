@@ -65,3 +65,22 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+async def get_current_active_user(
+    current_user=Depends(get_current_user)
+):
+    """验证当前用户是否处于被激活状态"""
+    if not current_user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账户已被禁用")
+    return current_user
+
+
+async def get_current_active_admin(
+    current_user=Depends(get_current_active_user)
+):
+    """验证当前用户是否具备管理员角色"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="权限不足：需要管理员权限")
+    return current_user
+
