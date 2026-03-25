@@ -17,7 +17,7 @@
 2. **路由聚合层** (`app/api/v1/router.py`)
 3. **业务模块层 / 领域层** (`app/modules/`)：按业务拆分为 Auth, Chat, DataSource, Query, Chart, Insight, Report 七大模块，模块内部闭环管理 router, service, repository, models 和 schemas。
 4. **共享基建层** (`app/shared/`)：提供大模型统一调用 (AI Client)、内存与 Redis 两级缓存 (Cache Manager)、数据库会话池 (DB Session) 等抽象能力。
-5. **核心配置层** (`app/core/`)：掌控系统所有凭证、JWT 安全认证与中间件。
+5. **核心配置层** (`app/core/`)：掌控系统所有凭证、JWT 安全认证（含管理员双重鉴权）与中间件。
 
 ## 📁 目录结构
 
@@ -54,6 +54,7 @@ backend/
 
 ### Auth — 用户认证与鉴权
 提供用户注册（唯一性校验 + bcrypt 密码哈希）、JWT 令牌签发登录、Bearer Token 鉴权中间件，为其他模块的访问控制提供基础支撑。
+包含**管理员专属权限**：支持管理员调取全站用户列表，并执行账户的一键封禁、解封以及角色提权。
 
 ### Chat — 对话交互服务
 系统的核心交互入口。管理 `Conversation`（会话）与 `Message`（消息）的完整生命周期，支持多轮上下文对话。提供两种响应模式：**普通补全**（一次性返回完整结果）和 **SSE 流式补全**（逐块推送，适配前端打字机效果）。
@@ -90,6 +91,8 @@ backend/
 | **Auth** | `POST /auth/register` | 用户注册 |
 | | `POST /auth/login` | 用户登录，返回 JWT |
 | | `GET /auth/me` | 获取当前用户信息 |
+| | `GET /auth/users` | 【管理员】获取全部用户列表 |
+| | `PATCH /auth/users/{user_id}`| 【管理员】修改用户状态或角色提权 |
 | **Chat** | `POST /chat/completions` | 非流式对话补全 |
 | | `POST /chat/completions/stream` | SSE 流式对话补全 |
 | **DataSource** | `POST /datasource/` | 创建数据源 |
@@ -122,7 +125,7 @@ backend/
 - **两级全异步缓存系统**: L1 进程内存字典零网络开销极速访问，L2 Redis 持久态跨实例共享。
 - **现代化异步与类型提示**: 基于 `asyncpg` + SQLAlchemy 2.0 异步引擎的全链路异步 IO，Pydantic 2 严格类型安全校验。
 - **DDD 领域解耦**: 七大模块各自闭环管理 `Router → Service → Repository → Models`，满足单一职责与开闭原则。
-- **JWT 无状态认证**: `security.py` 提供密码哈希 + Token 签发 + `get_current_user` 依赖注入，一行代码即可为任意路由增加鉴权。
+- **细粒度 RBAC 安全流**: `security.py` 封装了 `get_current_active_user` 与 `get_current_active_admin` 依赖注入。通过在路由侧引入一行代码，即可实现封号拦截和高级管理员控制台保护。
 
 ## 🛠️ 安装与运行指南
 
