@@ -25,7 +25,8 @@ class ReportRepository(BaseRepository[Report]):
         db.add(report)
         await db.commit()
         await db.refresh(report)
-        return report
+        # 重新查询以预加载 items 关系，避免 Pydantic 序列化时触发异步懒加载
+        return await self.get_report_with_items(db, report.id)
 
     async def add_report_item(self, db: AsyncSession, report_id: int,
                               item_type: str, reference_id: Optional[int] = None,
@@ -51,8 +52,12 @@ class ReportRepository(BaseRepository[Report]):
         return result.scalars().first()
 
     async def list_reports(self, db: AsyncSession) -> List[Report]:
-        """列出所有报表"""
-        stmt = select(Report).order_by(Report.created_at.desc())
+        """列出所有报表（预加载组件项）"""
+        stmt = (
+            select(Report)
+            .options(selectinload(Report.items))
+            .order_by(Report.created_at.desc())
+        )
         result = await db.execute(stmt)
         return list(result.scalars().all())
 
